@@ -1,0 +1,20 @@
+[project]
+name = "camera-latency"
+version = "0.1.0"
+description = "Timestamped QR measurements of direct MJPEG camera latency"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["httpx>=0.28,<1", "Pillow>=11,<13", "pygame>=2.6,<3", "qrcode[pil]>=8,<9", "zxing-cpp>=2.3,<4"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["camera_latency*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
