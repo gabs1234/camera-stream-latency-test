@@ -2,8 +2,19 @@
 
 **Disclaimer: AI-generated code.**
 
-Measure direct MJPEG stream latency by pointing the camera at timestamped QR codes
-on another computer's screen.
+```mermaid
+flowchart LR
+    N["Same external NTP server"] -.-> S
+    N -.-> A
+    subgraph Source["Camera room"]
+        S["Source computer: emit<br/>Screen shows QR with scheduled time t0"] --> C["Camera"]
+    end
+    C -->|"HTTP(S) MJPEG"| A
+    subgraph Receiver["Receiving room: measure"]
+        A["Complete JPEG available<br/>Save arrival time t1"] --> Q["Keep newest frame<br/>Decode image + read QR"]
+        Q -->|"Original t1 + QR's t0"| R["First sighting per marker<br/>Latency = t1 - t0<br/>Live view + CSV + statistics"]
+    end
+```
 
 ## Install on both computers
 
@@ -17,7 +28,7 @@ pip install -e '.[test]'
 
 ## Configure the receiver
 
-Copy `.env.example` to `.env` if needed, then edit:
+Edit `.env` (copy `.env.example` if needed):
 
 ```dotenv
 CAMERA_URL='https://CAMERA_HOST/stream.mjpg'
@@ -25,16 +36,13 @@ CAMERA_USERNAME='viewer'
 CAMERA_PASSWORD='your-password'
 ```
 
-Use your camera's multipart MJPEG URL; each frame must include `Content-Length`.
-
-`.env` is ignored by Git. Run from its directory. CLI options override configuration.
-For HTTP Basic auth use `--auth basic`; for a private CA use `--ca-file camera-ca.pem`.
+Use a multipart MJPEG endpoint with per-frame `Content-Length`.
+`.env` stays out of Git. Run from its directory; CLI options override configuration.
 
 ## Run
 
-**First synchronize both computers to the same NTP server.** With chrony, check
-`chronyc sources -v` and `chronyc tracking` on both: the intended source should be
-selected and clock offsets small compared with the latency you want to measure.
+**Check synchronization first:** `chronyc sources -v` and `chronyc tracking` on both
+computers. Verify the selected server and small offsets.
 
 In the camera room, point the camera at the source screen:
 
@@ -48,29 +56,21 @@ In the receiving room:
 python -m camera_latency measure --output measurements.csv
 ```
 
-Escape exits. The receiver shows video, latency, fps and drops; on exit it reports
-count, median, p95, minimum and maximum. Use fresh output filenames for each run.
-Add `--headless --duration 60` for a timed run without a window.
+Escape exits and prints statistics. Use fresh output filenames.
 
 ## Read the results
 
-`arrival_latency_ms` measures scheduled QR time to complete JPEG availability in
-the receiver, before decoding and recognition. Only the first successful detection
-of each marker enters the statistics. Slow processing drops waiting frames.
-
-The source writes `source-timing.csv`. To examine scheduling offsets, copy it to
-the receiver and join the logs:
+Recognition time doesn't inflate `arrival_latency_ms`. To examine scheduling
+offsets, copy `source-timing.csv` to the receiver and join:
 
 ```bash
 python -m camera_latency report --measurements measurements.csv \
   --source-log source-timing.csv --output joined.csv
 ```
 
-Clock offset directly biases latency. Screen refresh, pixel response, camera
-exposure and failed detections limit accuracy; nanosecond timestamps do not mean
-nanosecond accuracy. Short flashes may be missed; increase visibility if needed.
-Delivered fps can differ from requested fps. The browser player may buffer further.
-Clock jumps are flagged and negative values preserved. Source logs record rendering
-submission, not physical pixel visibility; joining logs cannot remove that uncertainty.
+Clock offsets, screen refresh, pixel response, exposure and missed detections limit
+accuracy. Nanosecond units aren't nanosecond accuracy. Increase visibility if needed.
+Delivered fps may vary; browser players may buffer further. Clock jumps are flagged;
+negative values stay. Source logs capture submission, not physical pixel visibility.
 
 Tests: `python -m pytest -q`. More options: `python -m camera_latency measure --help`.
