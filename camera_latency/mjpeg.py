@@ -1,4 +1,4 @@
-"""Incremental Axis multipart parser; HTTP transport is delegated to HTTPX."""
+"""Incremental multipart MJPEG parser; HTTP transport is delegated to HTTPX."""
 from email.message import Message
 
 MAX_JPEG = 32 * 1024 * 1024
@@ -20,8 +20,8 @@ def boundary_from_content_type(content_type: str) -> bytes:
 class MultipartJPEG:
     """Yield as soon as Content-Length bytes exist, without awaiting next boundary.
 
-    Missing Content-Length is rejected: Axis documents it, and guessing JPEG ends
-    or waiting for another frame would give different availability semantics.
+    Missing Content-Length is rejected: guessing JPEG ends or waiting for another
+    frame would give different availability semantics.
     """
     def __init__(self, boundary: bytes):
         self.boundary = boundary
@@ -52,7 +52,7 @@ class MultipartJPEG:
                 try:
                     self.length = int(headers['Content-Length'])
                 except (TypeError, ValueError):
-                    raise ValueError('Axis MJPEG requires Content-Length per part') from None
+                    raise ValueError('MJPEG requires Content-Length per part') from None
                 if not 1 <= self.length <= MAX_JPEG:
                     raise ValueError('JPEG size outside safety limit')
                 del self.buffer[:end + 4]

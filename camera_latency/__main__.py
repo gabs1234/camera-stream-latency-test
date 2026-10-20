@@ -4,7 +4,10 @@ import math
 import os
 import ssl
 import sys
+from pathlib import Path
 from urllib.parse import urlsplit
+
+from dotenv import dotenv_values
 
 
 def positive(value):
@@ -22,12 +25,12 @@ def main():
     emit.add_argument('--visible-ms', type=positive, default=150)
     emit.add_argument('--source-log', default='source-timing.csv')
     emit.add_argument('--clock-jump-ms', type=positive, default=20)
-    measure = commands.add_parser('measure', help='receive Axis multipart MJPEG')
-    measure.add_argument('--url', required=True)
+    measure = commands.add_parser('measure', help='receive HTTP(S) multipart MJPEG')
+    measure.add_argument('--url', help='stream URL; defaults to CAMERA_URL from environment or .env')
     measure.add_argument('--output', default='measurements.csv')
-    measure.add_argument('--username')
+    measure.add_argument('--username', help='HTTP username; defaults to CAMERA_USERNAME')
     measure.add_argument('--auth', choices=['digest', 'basic'], default='digest')
-    measure.add_argument('--password-env', help='name of environment variable containing password; otherwise prompt')
+    measure.add_argument('--password-env', help='password variable name; defaults to CAMERA_PASSWORD, then prompt')
     measure.add_argument('--ca-file', help='PEM CA file for a private camera certificate')
     measure.add_argument('--timeout', type=positive, default=5, help='network inactivity timeout, seconds')
     measure.add_argument('--headless', action='store_true')
@@ -47,6 +50,15 @@ def main():
             print('Warning: short visibility/black gap may miss frames or overlap exposures at 25–60 fps.', file=sys.stderr)
         from .emitter import emit as run
     elif args.command == 'measure':
+        # Read only the working directory's .env, without changing the process
+        # environment or expanding ${...} inside passwords. Exported values win.
+        config = {**dotenv_values(Path.cwd() / '.env', interpolate=False), **os.environ}
+        if args.url is None:
+            args.url = config.get('CAMERA_URL')
+        if args.username is None:
+            args.username = config.get('CAMERA_USERNAME')
+        if not args.url:
+            parser.error('provide --url or set CAMERA_URL in the environment or .env')
         try:
             url = urlsplit(args.url)
             if url.scheme not in ('http', 'https') or not url.hostname or url.username or url.password or url.fragment:
@@ -58,9 +70,11 @@ def main():
         args.password = None
         if args.username:
             if args.password_env:
-                if args.password_env not in os.environ:
+                if config.get(args.password_env) is None:
                     parser.error('password environment variable is not set')
-                args.password = os.environ[args.password_env]
+                args.password = config[args.password_env]
+            elif config.get('CAMERA_PASSWORD'):
+                args.password = config['CAMERA_PASSWORD']
             else:
                 args.password = getpass.getpass('Camera password: ')
         args.tls_context = ssl.create_default_context(cafile=args.ca_file)
